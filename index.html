@@ -1357,7 +1357,7 @@
       var b = document.createElement('button');
       b.type = 'button';
       b.className = 'chip' + (v === selDuration ? ' active' : '');
-      b.textContent = v === 25 ? '25m (1番茄)' : v + 'm';
+      b.textContent = v + 'm';
       b.dataset.v = v;
       b.addEventListener('click', function () {
         selDuration = v;

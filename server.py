@@ -182,8 +182,13 @@ def _validate_record(raw):
     if not rid or len(rid) > 40:
         rid = _new_id()
 
+    # 是否计入热力图（可选，默认 true；false 的记录仍保存可查看，仅不参与热力图着色）
+    hm = raw.get("heatmap", True)
+    if not isinstance(hm, bool):
+        raise ApiError(400, "heatmap 必须是布尔值（true/false）")
+
     return {"id": rid, "date": d, "time": t, "duration": duration,
-            "tag": tag, "content": content}
+            "tag": tag, "content": content, "heatmap": hm}
 
 
 # ============================ 鉴权限流 ============================

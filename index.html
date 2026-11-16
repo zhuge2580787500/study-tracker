@@ -44,7 +44,8 @@
     --blue: #2563eb;  --blue-soft: rgba(59, 130, 246, .12);
     --violet: #7c3aed; --violet-soft: rgba(139, 92, 246, .12);
     --rose: #e11d48;  --rose-soft: rgba(244, 63, 94, .10);
-    --hm-0: #e4ebe2; --hm-1: #9be9a8; --hm-2: #40c463; --hm-3: #30a14e; --hm-4: #216e39;
+    --hm-0: #e4ebe2; --hm-1: #b7efc5; --hm-2: #9be9a8; --hm-3: #6fdd8b; --hm-4: #40c463;
+    --hm-5: #30a14e; --hm-6: #268a43; --hm-7: #1b5e30;
     --hm-glow: transparent;
     --shadow-1: 0 1px 2px rgba(26,43,32,.05), 0 4px 16px rgba(26,43,32,.06);
     --shadow-2: 0 2px 4px rgba(26,43,32,.07), 0 12px 32px rgba(26,43,32,.12);
@@ -76,8 +77,9 @@
     --blue: #60a5fa;  --blue-soft: rgba(96, 165, 250, .14);
     --violet: #a78bfa; --violet-soft: rgba(167, 139, 250, .15);
     --rose: #fb7185;  --rose-soft: rgba(251, 113, 133, .13);
-    --hm-0: #151d18; --hm-1: #0e4429; --hm-2: #006d32; --hm-3: #26a641; --hm-4: #39d353;
-    --hm-glow: rgba(57, 211, 83, .35);
+    --hm-0: #151d18; --hm-1: #0e4429; --hm-2: #006d32; --hm-3: #1a8f3c; --hm-4: #26a641;
+    --hm-5: #39d353; --hm-6: #56e36f; --hm-7: #7cf795;
+    --hm-glow: rgba(124, 247, 149, .40);
     --shadow-1: 0 1px 2px rgba(0,0,0,.40), 0 4px 16px rgba(0,0,0,.30);
     --shadow-2: 0 2px 4px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.50);
     --nav-bg: rgba(11, 17, 14, .76);
@@ -315,7 +317,10 @@
   .hm-cell.lv1 { background: var(--hm-1); }
   .hm-cell.lv2 { background: var(--hm-2); }
   .hm-cell.lv3 { background: var(--hm-3); }
-  .hm-cell.lv4 { background: var(--hm-4); box-shadow: 0 0 7px var(--hm-glow); }
+  .hm-cell.lv4 { background: var(--hm-4); }
+  .hm-cell.lv5 { background: var(--hm-5); }
+  .hm-cell.lv6 { background: var(--hm-6); }
+  .hm-cell.lv7 { background: var(--hm-7); box-shadow: 0 0 7px var(--hm-glow); }
   .hm-cell:not(.future):hover { transform: scale(1.35); z-index: 2; }
   .hm-cell.future { background: transparent; cursor: default; }
   .hm-cell.today { box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--text-3); }
@@ -355,6 +360,16 @@
     }
   }
   .dur-badge { font-size: 12px; font-weight: 600; color: var(--brand); background: var(--brand-soft); border-radius: 999px; padding: 2px 10px; }
+  .no-hm-badge { font-size: 11.5px; font-weight: 600; color: var(--text-3); border: 1px dashed var(--border-2); border-radius: 999px; padding: 2px 9px; }
+  .check-pill {
+    display: inline-flex; align-items: center; gap: 8px; min-height: 36px;
+    padding: 6px 14px; border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface); font-size: 13.5px; font-weight: 600; color: var(--text-2);
+    cursor: pointer; user-select: none; transition: background-color .15s, border-color .15s, color .15s;
+  }
+  .check-pill:hover { border-color: var(--border-2); color: var(--text); }
+  .check-pill input { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; margin: 0; }
+  .check-pill:has(input:checked) { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
   .record-content { font-size: 14px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
   .record .btn-danger { margin-left: auto; min-height: 36px; font-size: 12.5px; padding: 4px 12px; }
   .empty { text-align: center; color: var(--text-3); padding: 22px 0 14px; }
@@ -558,6 +573,15 @@
       <span class="muted" style="font-size:12px">可选过去日期补录</span>
     </div>
 
+    <div class="form-row">
+      <span class="form-label">🧮 热力图</span>
+      <label class="check-pill" for="fHeatmap">
+        <input type="checkbox" id="fHeatmap" checked>
+        <span>计入热力图</span>
+      </label>
+      <span class="muted" style="font-size:12px">取消勾选后记录仍保存可查看，但不点亮热力图格子</span>
+    </div>
+
     <div class="push-row">
       <button id="btnPush" class="btn btn-primary">🚀 Push Commit</button>
       <span class="kbd-hint"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> 快速提交</span>
@@ -605,13 +629,16 @@
       </div>
     </div>
     <div class="hm-legend">
-      <span class="hint">点击格子查看当日详情 · 手机上可左右滑动</span>
+      <span class="hint">点击格子查看当日详情 · 颜色按当日计入的总分钟数分 8 档</span>
       <span>少</span>
-      <span class="sq" style="background:var(--hm-0)"></span>
-      <span class="sq" style="background:var(--hm-1)"></span>
-      <span class="sq" style="background:var(--hm-2)"></span>
-      <span class="sq" style="background:var(--hm-3)"></span>
-      <span class="sq" style="background:var(--hm-4)"></span>
+      <span class="sq" style="background:var(--hm-0)" title="0 分钟"></span>
+      <span class="sq" style="background:var(--hm-1)" title="1~29 分钟"></span>
+      <span class="sq" style="background:var(--hm-2)" title="30~59 分钟"></span>
+      <span class="sq" style="background:var(--hm-3)" title="60~89 分钟"></span>
+      <span class="sq" style="background:var(--hm-4)" title="90~119 分钟"></span>
+      <span class="sq" style="background:var(--hm-5)" title="120~179 分钟"></span>
+      <span class="sq" style="background:var(--hm-6)" title="180~239 分钟"></span>
+      <span class="sq" style="background:var(--hm-7)" title="≥240 分钟"></span>
       <span>多</span>
     </div>
   </section>
@@ -900,10 +927,12 @@
   }
 
   /* ================= 统计 ================= */
-  function dayMap() {
+  /* heatmapOnly=true 时只统计计入热力图的记录（heatmap !== false） */
+  function dayMap(heatmapOnly) {
     var m = {};
     for (var i = 0; i < commits.length; i++) {
       var c = commits[i];
+      if (heatmapOnly && c.heatmap === false) continue;
       if (!m[c.date]) m[c.date] = { n: 0, min: 0 };
       m[c.date].n++;
       m[c.date].min += Number(c.duration) || 0;
@@ -1073,16 +1102,21 @@
   }
 
   /* ================= 热力图 ================= */
+  /* 8 档色阶：由当日计入热力图的总专注分钟数决定 */
   function levelOf(n, min) {
     if (n === 0) return 0;
-    if (n >= 4 || min >= 120) return 4;
-    if (n >= 3 || min >= 60) return 3;
-    if (n >= 2 || min >= 30) return 2;
+    if (min >= 240) return 7;
+    if (min >= 180) return 6;
+    if (min >= 120) return 5;
+    if (min >= 90) return 4;
+    if (min >= 60) return 3;
+    if (min >= 30) return 2;
     return 1;
   }
 
   function renderHeatmap() {
-    var m = dayMap();
+    var m = dayMap(true);      // 热力图只统计计入的记录
+    var mAll = dayMap();       // 用于提示"另有 N 次不计入"
     var today = todayStr();
     var curYear = new Date().getFullYear();
     // 自然年：1 月 1 日对齐到周一，12 月 31 日对齐到周日
@@ -1112,15 +1146,16 @@
           cell.classList.add('future');
         } else {
           var n = info ? info.n : 0, min = info ? info.min : 0;
+          var excluded = (mAll[dateStr] ? mAll[dateStr].n : 0) - n;
           cell.classList.add('lv' + levelOf(n, min));
           if (dateStr === today) cell.classList.add('today');
           cell.setAttribute('role', 'button');
-          cell.setAttribute('aria-label', dateStr + '：' + n + ' 次提交，' + min + ' 分钟');
+          cell.setAttribute('aria-label', dateStr + '：计入 ' + n + ' 次提交，' + min + ' 分钟' + (excluded > 0 ? '，另有 ' + excluded + ' 次不计入' : ''));
           cell.dataset.date = dateStr;
           if (dateStr === selectedDate) cell.classList.add('selected');
           cell.addEventListener('click', function () { selectDate(dateStr); });
           if (canHover) {
-            cell.addEventListener('mouseenter', function (e) { showTip(e, dateStr, n, min); });
+            cell.addEventListener('mouseenter', function (e) { showTip(e, dateStr, n, min, excluded); });
             cell.addEventListener('mousemove', function (e) { moveTip(e); });
             cell.addEventListener('mouseleave', hideTip);
           }
@@ -1188,11 +1223,13 @@
   }
 
   /* ================= Tooltip ================= */
-  function showTip(e, dateStr, n, min) {
+  function showTip(e, dateStr, n, min, excluded) {
     var tip = $('#tooltip');
-    tip.textContent = n > 0
-      ? dateStr + '：共 ' + n + ' 次提交（累计 ' + min + ' 分钟）'
-      : dateStr + '：没有提交';
+    var txt = n > 0
+      ? dateStr + '：计入 ' + n + ' 次提交（累计 ' + min + ' 分钟）'
+      : dateStr + '：没有计入的提交';
+    if (excluded > 0) txt += ' · 另有 ' + excluded + ' 次不计入';
+    tip.textContent = txt;
     tip.style.display = 'block';
     moveTip(e);
   }
@@ -1275,6 +1312,13 @@
     dur.className = 'dur-badge';
     dur.textContent = '⏱ ' + c.duration + ' 分钟';
     meta.appendChild(dur);
+
+    if (c.heatmap === false) {
+      var nh = document.createElement('span');
+      nh.className = 'no-hm-badge';
+      nh.textContent = '不计入热力图';
+      meta.appendChild(nh);
+    }
 
     if (unlocked) {
       var del = document.createElement('button');
@@ -1362,7 +1406,7 @@
     api('/api/commits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date: date, time: time, duration: selDuration, tag: selTag, content: content })
+      body: JSON.stringify({ date: date, time: time, duration: selDuration, tag: selTag, content: content, heatmap: $('#fHeatmap').checked })
     }).then(function (res) {
       commits.push(res.commit);
       selectedDate = date;
@@ -1413,7 +1457,7 @@
         lines.push('（无记录）');
       } else {
         day.forEach(function (c) {
-          lines.push('- `' + (c.time || '--:--') + '` **' + c.tag + '** · ' + c.duration + ' 分钟');
+          lines.push('- `' + (c.time || '--:--') + '` **' + c.tag + '** · ' + c.duration + ' 分钟' + (c.heatmap === false ? '（不计入热力图）' : ''));
           lines.push('  ' + String(c.content || '').replace(/\n/g, '\n  '));
         });
       }

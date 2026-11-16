@@ -674,7 +674,7 @@
   <!-- 快速提交面板（解锁后可见） -->
   <section class="card hidden" id="submitPanel">
     <div class="card-title">✍️ 快速提交 <span class="muted" style="font-weight:500;font-size:12px">管理员模式</span></div>
-    <textarea id="fContent" placeholder="今天学了什么？例如：花 25 分钟理解了线程池核心参数" maxlength="2000"></textarea>
+    <textarea id="fContent" placeholder="今天学了什么？例如：花 30 分钟理解了线程池核心参数" maxlength="2000"></textarea>
 
     <div class="form-row">
       <span class="form-label">⏱ 专注时长</span>
@@ -901,7 +901,7 @@
   var LS_KEY = 'study_tracker_password';
   var THEME_KEY = 'study_tracker_theme';
   var TAGS = ['Java后端', 'AI Agent', '科研/杂活', '算法刷题', '其他'];
-  var DURATIONS = [1, 15, 25, 45, 60, 90];
+  var DURATIONS = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
   var WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   var CELL = 12, GAP = 3, STEP = CELL + GAP;
   var TAG_COLORS_LIGHT = ['#15803d', '#1d4ed8', '#6d28d9', '#b45309', '#be123c', '#0e7490', '#c2410c', '#4d7c0f'];
@@ -911,7 +911,7 @@
   var commits = [];
   var unlocked = false;
   var selectedDate = todayStr();
-  var selDuration = 25;
+  var selDuration = 30;
   var selTag = TAGS[0];
   var canHover = window.matchMedia && window.matchMedia('(hover: hover)').matches;
   var firstStats = true;

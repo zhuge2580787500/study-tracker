@@ -5,6 +5,8 @@
 commits.json
 # 自动快照与手动备份
 backups/
+# 每小时自动备份（运行时生成）
+hourly-backup/
 # nohup 日志与进程文件
 logs/
 tracker.pid

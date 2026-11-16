@@ -20,6 +20,45 @@ GitHub 提交热力图风格的个人学习记录网站。**零第三方依赖**
 
 注意：顶部统计卡片（今日提交 / 连胜 / 累计专注）统计**全部**记录，不受该开关影响；周报复导出不计入的记录会标注。数据字段为 `heatmap: true/false`（旧数据无此字段时按 true 处理，完全向后兼容）。
 
+## 每小时自动备份（commits.json）
+
+除了应用自身"每次修改前自动快照（保留 60 份）"，还有一层**每小时定时备份**：
+
+- **每小时自动运行**：由 systemd timer 触发（开机自启、关机期间错过的任务开机后补跑）
+- **覆盖式备份**：写入 `hourly-backup/commits-latest.json`，每次覆盖上一份，只保留最新
+- **数据校验保护（关键）**：写入前校验源文件是合法 JSON 且结构正确，**损坏则拒绝覆盖**，绝不把好备份冲成坏数据；写入为原子操作（tmp + fsync + replace）并回读 SHA256 校验
+- **无变化跳过**：源数据没变动时不写盘，日志记录"数据无变化"
+- **防并发**：文件锁避免两次运行重叠
+
+```bash
+# 安装（自动运行）
+cd ~/study-tracker && chmod +x install-backup.sh && ./install-backup.sh
+
+# 常用命令
+systemctl list-timers study-tracker-backup.timer      # 查看下次执行时间
+sudo systemctl start study-tracker-backup.service     # 立即备份一次
+journalctl -u study-tracker-backup.service -n 20      # 查看运行日志
+tail -f ~/study-tracker/logs/hourly-backup.log        # 或看日志文件
+
+# 可选：保留 N 份带时间戳的历史副本（默认 0 = 纯覆盖式）
+python3 hourly_backup.py --keep 24
+python3 hourly_backup.py --status                      # 查看备份状态
+
+# 卸载
+sudo systemctl disable --now study-tracker-backup.timer
+sudo rm /etc/systemd/system/study-tracker-backup.{service,timer} && sudo systemctl daemon-reload
+```
+
+<details>
+<summary>如果更想用 cron（不推荐，但可用）</summary>
+
+```bash
+crontab -e
+# 每小时第 5 分钟跑一次
+5 * * * * cd /home/ubuntu/study-tracker && /usr/bin/python3 hourly_backup.py >> logs/hourly-backup.log 2>&1
+```
+</details>
+
 ## 正反馈系统
 
 为了让"每天学一点"持续有动力，内置了一套成长反馈引擎（全部由现有数据在浏览器端推导，**不改后端、不改数据格式**，迁移服务器后自动重建）：

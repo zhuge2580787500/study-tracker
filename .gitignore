@@ -7,6 +7,10 @@ commits.json
 backups/
 # 每小时自动备份（运行时生成）
 hourly-backup/
+# 删除审计日志（含被删记录内容，绝不提交）
+deleted-log.jsonl
+deleted-log.jsonl.1
+recovery/
 # nohup 日志与进程文件
 logs/
 tracker.pid

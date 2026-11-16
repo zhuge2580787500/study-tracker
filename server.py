@@ -53,6 +53,7 @@ DATA_FILE = os.path.join(BASE_DIR, "commits.json")
 INDEX_FILE = os.path.join(BASE_DIR, "index.html")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 ENV_FILE = os.path.join(BASE_DIR, ".env")
+DELETED_LOG = os.path.join(BASE_DIR, "deleted-log.jsonl")
 
 MAX_BODY_BYTES = 64 * 1024      # 请求体上限 64KB
 MAX_BACKUPS = 60                # 自动快照保留份数
@@ -136,6 +137,50 @@ def _backup_unlocked():
 def _new_id():
     """毫秒时间戳 + 随机后缀，避免同毫秒碰撞。"""
     return str(int(time.time() * 1000)) + secrets.token_hex(2)
+
+
+# ============================ 删除审计（防误删） ============================
+
+DELETED_LOG_MAX = 5 * 1024 * 1024   # 5MB 后轮转
+
+
+def _append_deleted(records, reason, ip):
+    """把被删除/被覆盖的记录追加到审计日志，任何删除都可回溯恢复。"""
+    if not records:
+        return
+    try:
+        if os.path.exists(DELETED_LOG) and os.path.getsize(DELETED_LOG) > DELETED_LOG_MAX:
+            os.replace(DELETED_LOG, DELETED_LOG + ".1")
+        stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with open(DELETED_LOG, "a", encoding="utf-8") as f:
+            for r in records:
+                f.write(json.dumps({"deleted_at": stamp, "reason": reason,
+                                    "ip": ip, "record": r}, ensure_ascii=False) + "\n")
+            f.flush()
+            os.fsync(f.fileno())
+    except OSError:
+        pass  # 审计失败不阻断主流程
+
+
+def _read_deleted(limit):
+    """读取最近的删除记录（最新在前）。"""
+    if not os.path.exists(DELETED_LOG):
+        return []
+    try:
+        with open(DELETED_LOG, "r", encoding="utf-8") as f:
+            lines = f.readlines()[-limit:]
+        out = []
+        for ln in reversed(lines):
+            ln = ln.strip()
+            if not ln:
+                continue
+            try:
+                out.append(json.loads(ln))
+            except json.JSONDecodeError:
+                continue
+        return out
+    except OSError:
+        return []
 
 
 def _validate_record(raw):
@@ -337,6 +382,8 @@ class Handler(BaseHTTPRequestHandler):
                 return self._get_commits()
             if path == "/api/export":
                 return self._export()
+            if path == "/api/deleted":
+                return self._deleted(parse_qs(parsed.query))
             if path == "/healthz":
                 return self._json(200, {"ok": True})
             return self._json(404, {"error": "页面不存在"})
@@ -449,11 +496,16 @@ class Handler(BaseHTTPRequestHandler):
             raise ApiError(400, "缺少 id 参数")
         with _data_lock:
             data = _load_unlocked()
-            remaining = [c for c in data["commits"] if c.get("id") != rid]
-            if len(remaining) == len(data["commits"]):
+            target = None
+            for c in data["commits"]:
+                if c.get("id") == rid:
+                    target = c
+                    break
+            if target is None:
                 raise ApiError(404, "未找到该记录")
             _backup_unlocked()
-            data["commits"] = remaining
+            _append_deleted([target], "delete", self.client_address[0])  # 审计：删除可回溯
+            data["commits"] = [c for c in data["commits"] if c.get("id") != rid]
             _save_unlocked(data)
         self._json(200, {"ok": True})
 
@@ -518,6 +570,18 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, body, extra={
             "Content-Disposition": 'attachment; filename="%s"' % fname})
 
+    def _deleted(self, query):
+        """查看最近被删除/被覆盖的记录（用于误删恢复）。"""
+        if not self._check_auth():
+            return
+        try:
+            limit = int((query.get("limit") or ["50"])[0])
+        except ValueError:
+            limit = 50
+        limit = max(1, min(500, limit))
+        entries = _read_deleted(limit)
+        self._json(200, {"ok": True, "count": len(entries), "entries": entries})
+
     def _import(self):
         if not self._check_auth():
             return
@@ -538,7 +602,9 @@ class Handler(BaseHTTPRequestHandler):
             seen.add(r["id"])
             deduped.append(r)
         with _data_lock:
+            old = _load_unlocked().get("commits", [])
             _backup_unlocked()  # 覆盖前先备份旧数据
+            _append_deleted(old, "import-overwrite", self.client_address[0])  # 审计：覆盖前的数据可回溯
             _save_unlocked({"commits": deduped})
         self._json(200, {"ok": True, "count": len(deduped)})
 

@@ -28,7 +28,7 @@ study-tracker/
 
 ```bash
 ssh ubuntu@<服务器IP>
-git clone https://github.com/<你的用户名>/study-tracker.git
+git clone https://github.com/zhuge2580787500/study-tracker.git
 cd study-tracker
 chmod +x *.sh
 ./install.sh          # 自动生成强随机密码 + systemd 开机自启
@@ -95,7 +95,7 @@ scp ubuntu@<旧服务器IP>:~/study-tracker/backups/study-tracker-data-*.tar.gz 
 
 # 2. 新服务器：克隆项目 + 安装（密码会重新生成，也可沿用旧 .env）
 ssh ubuntu@<新服务器IP>
-git clone https://github.com/<你的用户名>/study-tracker.git
+git clone https://github.com/zhuge2580787500/study-tracker.git
 cd study-tracker && chmod +x *.sh && ./install.sh
 
 # 3. 上传备份包并一键恢复

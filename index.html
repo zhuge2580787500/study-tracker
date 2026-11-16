@@ -44,8 +44,9 @@
     --blue: #2563eb;  --blue-soft: rgba(59, 130, 246, .12);
     --violet: #7c3aed; --violet-soft: rgba(139, 92, 246, .12);
     --rose: #e11d48;  --rose-soft: rgba(244, 63, 94, .10);
-    --hm-0: #e4ebe2; --hm-1: #b7efc5; --hm-2: #9be9a8; --hm-3: #6fdd8b; --hm-4: #40c463;
-    --hm-5: #30a14e; --hm-6: #268a43; --hm-7: #1b5e30;
+    --hm-0: #e4ebe2; --hm-1: #d3f9d8; --hm-2: #b7efc5; --hm-3: #9be9a8; --hm-4: #7fdf92;
+    --hm-5: #62d67c; --hm-6: #40c463; --hm-7: #30a14e; --hm-8: #268a43; --hm-9: #1e7538;
+    --hm-10: #175f2d; --hm-11: #0f4a23;
     --hm-glow: transparent;
     --shadow-1: 0 1px 2px rgba(26,43,32,.05), 0 4px 16px rgba(26,43,32,.06);
     --shadow-2: 0 2px 4px rgba(26,43,32,.07), 0 12px 32px rgba(26,43,32,.12);
@@ -77,8 +78,9 @@
     --blue: #60a5fa;  --blue-soft: rgba(96, 165, 250, .14);
     --violet: #a78bfa; --violet-soft: rgba(167, 139, 250, .15);
     --rose: #fb7185;  --rose-soft: rgba(251, 113, 133, .13);
-    --hm-0: #151d18; --hm-1: #0e4429; --hm-2: #006d32; --hm-3: #1a8f3c; --hm-4: #26a641;
-    --hm-5: #39d353; --hm-6: #56e36f; --hm-7: #7cf795;
+    --hm-0: #151d18; --hm-1: #0b3a22; --hm-2: #0e4429; --hm-3: #0f5130; --hm-4: #115f38;
+    --hm-5: #146d40; --hm-6: #177a47; --hm-7: #1b884e; --hm-8: #219a56; --hm-9: #26a641;
+    --hm-10: #39d353; --hm-11: #7cf795;
     --hm-glow: rgba(124, 247, 149, .40);
     --shadow-1: 0 1px 2px rgba(0,0,0,.40), 0 4px 16px rgba(0,0,0,.30);
     --shadow-2: 0 2px 4px rgba(0,0,0,.45), 0 12px 32px rgba(0,0,0,.50);
@@ -322,7 +324,11 @@
   .hm-cell.lv4 { background: var(--hm-4); }
   .hm-cell.lv5 { background: var(--hm-5); }
   .hm-cell.lv6 { background: var(--hm-6); }
-  .hm-cell.lv7 { background: var(--hm-7); box-shadow: 0 0 7px var(--hm-glow); }
+  .hm-cell.lv7 { background: var(--hm-7); }
+  .hm-cell.lv8 { background: var(--hm-8); }
+  .hm-cell.lv9 { background: var(--hm-9); }
+  .hm-cell.lv10 { background: var(--hm-10); }
+  .hm-cell.lv11 { background: var(--hm-11); box-shadow: 0 0 7px var(--hm-glow); }
   .hm-cell:not(.future):hover { transform: scale(1.35); z-index: 2; }
   .hm-cell.future { background: transparent; cursor: default; }
   .hm-cell.today { box-shadow: 0 0 0 1px var(--surface), 0 0 0 2px var(--text-3); }
@@ -751,16 +757,20 @@
       </div>
     </div>
     <div class="hm-legend">
-      <span class="hint">点击格子查看当日详情 · 颜色按当日计入的总分钟数分 8 档</span>
+      <span class="hint">点击格子查看当日详情 · 每 10 分钟一档，共 12 档</span>
       <span>少</span>
-      <span class="sq" style="background:var(--hm-0)" title="0 分钟"></span>
-      <span class="sq" style="background:var(--hm-1)" title="1~29 分钟"></span>
-      <span class="sq" style="background:var(--hm-2)" title="30~59 分钟"></span>
-      <span class="sq" style="background:var(--hm-3)" title="60~89 分钟"></span>
-      <span class="sq" style="background:var(--hm-4)" title="90~119 分钟"></span>
-      <span class="sq" style="background:var(--hm-5)" title="120~179 分钟"></span>
-      <span class="sq" style="background:var(--hm-6)" title="180~239 分钟"></span>
-      <span class="sq" style="background:var(--hm-7)" title="≥240 分钟"></span>
+      <span class="sq" style="background:var(--hm-0)" title="0 分钟（无计入记录）"></span>
+      <span class="sq" style="background:var(--hm-1)" title="1~9 分钟"></span>
+      <span class="sq" style="background:var(--hm-2)" title="10~19 分钟"></span>
+      <span class="sq" style="background:var(--hm-3)" title="20~29 分钟"></span>
+      <span class="sq" style="background:var(--hm-4)" title="30~39 分钟"></span>
+      <span class="sq" style="background:var(--hm-5)" title="40~49 分钟"></span>
+      <span class="sq" style="background:var(--hm-6)" title="50~59 分钟"></span>
+      <span class="sq" style="background:var(--hm-7)" title="60~69 分钟"></span>
+      <span class="sq" style="background:var(--hm-8)" title="70~79 分钟"></span>
+      <span class="sq" style="background:var(--hm-9)" title="80~89 分钟"></span>
+      <span class="sq" style="background:var(--hm-10)" title="90~99 分钟"></span>
+      <span class="sq" style="background:var(--hm-11)" title="≥100 分钟"></span>
       <span>多</span>
     </div>
   </section>
@@ -1303,16 +1313,12 @@
   }
 
   /* ================= 热力图 ================= */
-  /* 8 档色阶：由当日计入热力图的总专注分钟数决定 */
+  /* 12 档色阶：0，1-9，10-19 … 90-99，≥100（按当日计入热力图的总专注分钟数） */
+  var MAX_LEVEL = 11;
   function levelOf(n, min) {
     if (n === 0) return 0;
-    if (min >= 240) return 7;
-    if (min >= 180) return 6;
-    if (min >= 120) return 5;
-    if (min >= 90) return 4;
-    if (min >= 60) return 3;
-    if (min >= 30) return 2;
-    return 1;
+    if (min >= 100) return 11;
+    return Math.min(11, Math.floor(min / 10) + 1);
   }
 
   function renderHeatmap() {
@@ -2363,7 +2369,7 @@
     }
     var m = dayMap(true);
     var lvColors = [];
-    for (var li = 0; li <= 7; li++) lvColors.push(cssVar('--hm-' + li) || '#ebedf0');
+    for (var li = 0; li <= MAX_LEVEL; li++) lvColors.push(cssVar('--hm-' + li) || '#ebedf0');
     var cw = 46, cgap = (W - 96 - 7 * cw) / 6, cy = 548;
     cells.forEach(function (ds, i) {
       var info = m[ds];

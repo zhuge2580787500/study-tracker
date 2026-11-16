@@ -487,6 +487,15 @@
   /* ================= 彩带 ================= */
   .confetti-canvas { position: fixed; inset: 0; z-index: 400; pointer-events: none; }
 
+  /* ================= 分享弹窗 ================= */
+  .share-dialog { max-width: 430px; }
+  .share-tabs { display: flex; gap: 8px; margin-bottom: 12px; }
+  .share-preview { border-radius: 12px; overflow: hidden; border: 1px solid var(--border); margin-bottom: 12px; background: var(--surface-2); }
+  .share-preview canvas { display: block; width: 100%; height: auto; max-height: 52vh; object-fit: contain; }
+  .share-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+  .share-actions .btn { flex: 1; min-width: 104px; }
+  .share-tip { font-size: 11.5px; color: var(--text-3); margin-top: 10px; line-height: 1.5; }
+
   /* ================= 入场动画 ================= */
   .reveal { animation: rise .55s cubic-bezier(.22,1,.36,1) both; }
   @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
@@ -575,6 +584,7 @@
           <path d="M20.6 14.2A8.8 8.8 0 0 1 9.8 3.4a8.8 8.8 0 1 0 10.8 10.8z"/>
         </svg>
       </button>
+      <button id="btnShare" class="btn">📤 分享<span class="hide-sm">打卡</span></button>
       <button id="btnWeek" class="btn">📋 导出本周<span class="hide-sm"> Markdown</span> 总结</button>
       <button id="btnLock" class="btn">🔒 未解锁<span class="hide-sm">（点击输入密码开启打卡）</span></button>
     </div>
@@ -812,6 +822,26 @@
   </div>
 </div>
 
+<!-- 分享打卡弹窗 -->
+<div class="overlay hidden" id="shareOverlay">
+  <div class="dialog share-dialog">
+    <h3>📤 分享打卡</h3>
+    <div class="share-tabs">
+      <button id="shareTabToday" class="chip active" type="button">今日打卡</button>
+      <button id="shareTabWeek" class="chip" type="button">本周总结</button>
+    </div>
+    <div class="share-preview"><canvas id="shareCanvas" aria-label="分享卡片预览"></canvas></div>
+    <div class="share-actions">
+      <button id="shareDownload" class="btn btn-primary" type="button">⬇️ 下载图片</button>
+      <button id="shareCopy" class="btn" type="button">📋 复制文案</button>
+    </div>
+    <p class="share-tip">图片随当前亮/暗主题生成（高清 1500×2100）。下载后配上复制的文案，即可发到 QQ 空间、朋友圈等任何地方。</p>
+    <div class="dialog-actions">
+      <button class="btn" id="shareClose" type="button">关闭</button>
+    </div>
+  </div>
+</div>
+
 <div id="toasts"></div>
 <div id="tooltip"></div>
 
@@ -823,7 +853,7 @@
   var LS_KEY = 'study_tracker_password';
   var THEME_KEY = 'study_tracker_theme';
   var TAGS = ['Java后端', 'AI Agent', '科研/杂活', '算法刷题', '其他'];
-  var DURATIONS = [15, 25, 45, 60, 90];
+  var DURATIONS = [1, 15, 25, 45, 60, 90];
   var WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
   var CELL = 12, GAP = 3, STEP = CELL + GAP;
   var TAG_COLORS_LIGHT = ['#15803d', '#1d4ed8', '#6d28d9', '#b45309', '#be123c', '#0e7490', '#c2410c', '#4d7c0f'];
@@ -871,6 +901,7 @@
     var meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.content = t === 'dark' ? '#0b110e' : '#f5f7f4';
     renderInspector(); // 标签徽章颜色随主题切换
+    if (!$('#shareOverlay').classList.contains('hidden')) renderShareCard(); // 分享卡片随主题重绘
   }
 
   function tagColor(tag) {
@@ -1962,6 +1993,342 @@
     return PRAISES[i];
   }
 
+  /* ================= 分享卡片 ================= */
+  var shareMode = 'today';
+
+  function cssVar(name) {
+    return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
+  function shareData(mode) {
+    var m = dayMap(true);
+    var today = todayStr();
+    var counted = commits.filter(function (c) { return c.heatmap !== false; });
+    var streak = currentStreak(new Set(Object.keys(m)));
+    if (mode === 'today') {
+      var t = m[today] || { n: 0, min: 0 };
+      var tags = {};
+      counted.forEach(function (c) {
+        if (c.date === today) tags[c.tag] = (tags[c.tag] || 0) + (Number(c.duration) || 0);
+      });
+      return { mode: mode, minutes: t.min, count: t.n, streak: streak, tags: tags, days: t.n > 0 ? 1 : 0 };
+    }
+    var dow = (parseDate(today).getDay() + 6) % 7;
+    var monday = addDays(today, -dow);
+    var week = counted.filter(function (c) { return c.date >= monday && c.date <= today; });
+    var minutes = 0, days = {}, tags = {};
+    week.forEach(function (c) {
+      var dur = Number(c.duration) || 0;
+      minutes += dur;
+      days[c.date] = (days[c.date] || 0) + dur;
+      tags[c.tag] = (tags[c.tag] || 0) + dur;
+    });
+    var best = null;
+    Object.keys(days).forEach(function (d) { if (!best || days[d] > days[best]) best = d; });
+    var lastMonday = addDays(monday, -7), lastSunday = addDays(monday, -1);
+    var lastMin = 0;
+    counted.forEach(function (c) { if (c.date >= lastMonday && c.date <= lastSunday) lastMin += Number(c.duration) || 0; });
+    return { mode: mode, minutes: minutes, count: week.length, streak: streak, tags: tags,
+             days: Object.keys(days).length, best: best, bestMin: best ? days[best] : 0, monday: monday, lastMin: lastMin };
+  }
+
+  function shareQuote(d) {
+    var tagNames = Object.keys(d.tags).sort(function (a, b) { return d.tags[b] - d.tags[a]; }).slice(0, 2);
+    if (d.mode === 'today') {
+      var s;
+      if (d.minutes > 0) {
+        s = '今天专注了 ' + d.minutes + ' 分钟，完成 ' + d.count + ' 次打卡';
+        if (tagNames.length) s += '，主要在忙 ' + tagNames.join(' 和 ');
+        s += '。';
+        s += d.streak > 1 ? '已连续打卡 ' + d.streak + ' 天，继续加油！' : '每一步都算数。';
+      } else {
+        s = '今天还没开始，行动是最好的答案。';
+      }
+      return s;
+    }
+    var w = '本周打卡 ' + d.days + ' 天，累计专注 ' + d.minutes + ' 分钟';
+    if (d.best) w += '，' + parseInt(d.best.slice(5, 7), 10) + ' 月 ' + parseInt(d.best.slice(8, 10), 10) + ' 日最投入（' + d.bestMin + ' 分钟）';
+    if (d.lastMin > 0) {
+      var delta = Math.round((d.minutes - d.lastMin) / d.lastMin * 100);
+      w += delta >= 0 ? '，比上周提升 ' + delta + '%' : '，比上周少 ' + (-delta) + '%，下周继续';
+    }
+    return w + '。';
+  }
+
+  function shareCopyText() {
+    var d = shareData(shareMode);
+    var title = d.mode === 'today'
+      ? (d.minutes > 0 ? '我今天专注学习了 ' + d.minutes + ' 分钟' : '今天也要加油学习呀')
+      : '本周学习周报：专注 ' + d.minutes + ' 分钟';
+    var summary = shareQuote(d) + ' ' + praise() + ' #学习打卡# #每天进步一点点#';
+    return { title: title, summary: summary };
+  }
+
+  /* ---- Canvas 绘制工具 ---- */
+  function rr(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    if (ctx.roundRect) { ctx.roundRect(x, y, w, h, r); return; }
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function blob(ctx, x, y, r, rgb, a) {
+    var g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(' + rgb + ',' + a + ')');
+    g.addColorStop(1, 'rgba(' + rgb + ',0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  function wrapText(ctx, text, maxW) {
+    var lines = [], line = '';
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (line && ctx.measureText(line + ch).width > maxW) { lines.push(line); line = ch; }
+      else line += ch;
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+  function drawSprout(ctx, cx, cy) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(0, 14); ctx.lineTo(0, -2); ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.moveTo(0, -1);
+    ctx.bezierCurveTo(1, -11, 8, -17, 17, -18);
+    ctx.bezierCurveTo(16, -8, 9, -2, 0, -1);
+    ctx.fill();
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    ctx.moveTo(0, -1);
+    ctx.bezierCurveTo(-1, -8, -6, -13, -13, -14);
+    ctx.bezierCurveTo(-12, -6, -7, -2, 0, -1);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function renderShareCard() {
+    var canvas = $('#shareCanvas');
+    var W = 750, H = 1050, S = 2;
+    canvas.width = W * S; canvas.height = H * S;
+    var ctx = canvas.getContext('2d');
+    ctx.setTransform(S, 0, 0, S, 0, 0);
+    var dark = currentTheme() === 'dark';
+    var brand = cssVar('--brand') || (dark ? '#34d399' : '#15803d');
+    var textC = dark ? '#e8f2ea' : '#1a2b20';
+    var subC = dark ? '#a3b8aa' : '#5b6b5f';
+    var faintC = dark ? '#7f9688' : '#68766d';
+    var surface = dark ? 'rgba(255,255,255,0.055)' : 'rgba(255,255,255,0.78)';
+    var border = dark ? 'rgba(255,255,255,0.10)' : 'rgba(26,43,32,0.10)';
+    var font = '"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
+    var d = shareData(shareMode);
+    var today = todayStr();
+
+    // 背景渐变 + 极光圈 + 噪点
+    var bg = ctx.createLinearGradient(0, 0, W * 0.3, H);
+    if (dark) { bg.addColorStop(0, '#0b110e'); bg.addColorStop(0.5, '#0e1c15'); bg.addColorStop(1, '#0a1410'); }
+    else { bg.addColorStop(0, '#f8fbf6'); bg.addColorStop(0.5, '#eef6ec'); bg.addColorStop(1, '#e4f1e2'); }
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    blob(ctx, W * 0.85, 130, 280, '52,211,153', dark ? 0.13 : 0.22);
+    blob(ctx, 40, H * 0.45, 320, '45,212,191', dark ? 0.08 : 0.15);
+    blob(ctx, W * 0.72, H - 100, 300, dark ? '167,139,250' : '251,191,36', dark ? 0.07 : 0.13);
+    ctx.save();
+    ctx.globalAlpha = dark ? 0.05 : 0.035;
+    for (var gi = 0; gi < 1500; gi++) {
+      ctx.fillStyle = Math.random() > 0.5 ? '#ffffff' : '#000000';
+      ctx.fillRect(Math.random() * W, Math.random() * H, 1, 1);
+    }
+    ctx.restore();
+    rr(ctx, 22, 22, W - 44, H - 44, 26);
+    ctx.strokeStyle = border; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // 头部：Logo + 品牌 + 日期徽章
+    var lg = ctx.createLinearGradient(48, 52, 100, 104);
+    lg.addColorStop(0, '#22c55e'); lg.addColorStop(1, '#0d9488');
+    rr(ctx, 48, 52, 52, 52, 15); ctx.fillStyle = lg; ctx.fill();
+    drawSprout(ctx, 74, 78);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = textC; ctx.font = '800 20px ' + font;
+    ctx.fillText('STUDY CONTRIBUTION WALL', 116, 70);
+    ctx.fillStyle = faintC; ctx.font = '500 13px ' + font;
+    ctx.fillText('个人学习打卡 · 每天进步一点点', 116, 94);
+    var now = new Date();
+    var dateStr = now.getFullYear() + '.' + pad(now.getMonth() + 1) + '.' + pad(now.getDate()) + ' ' + WEEKDAYS[now.getDay()];
+    ctx.font = '600 14px ' + font;
+    var dw = ctx.measureText(dateStr).width + 32;
+    rr(ctx, W - 48 - dw, 60, dw, 36, 18);
+    ctx.fillStyle = surface; ctx.fill();
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = subC; ctx.textAlign = 'center';
+    ctx.fillText(dateStr, W - 48 - dw / 2, 78);
+
+    // 标题
+    ctx.textAlign = 'left'; ctx.fillStyle = textC; ctx.font = '800 34px ' + font;
+    ctx.fillText(d.mode === 'today' ? '今日专注报告' : '本周学习周报', 48, 170);
+    var tg = ctx.createLinearGradient(48, 0, 148, 0);
+    tg.addColorStop(0, brand); tg.addColorStop(1, cssVar('--brand-2') || '#0d9488');
+    rr(ctx, 48, 190, 100, 6, 3); ctx.fillStyle = tg; ctx.fill();
+
+    // 主数字
+    var mg = ctx.createLinearGradient(48, 0, 460, 0);
+    mg.addColorStop(0, dark ? '#34d399' : '#15803d');
+    mg.addColorStop(1, dark ? '#22d3ee' : '#0d9488');
+    ctx.fillStyle = mg; ctx.font = '800 100px ' + font;
+    var numStr = String(d.minutes);
+    ctx.fillText(numStr, 44, 288);
+    var mw = ctx.measureText(numStr).width;
+    ctx.fillStyle = subC; ctx.font = '700 26px ' + font;
+    ctx.fillText('分钟', 54 + mw, 288);
+    ctx.fillStyle = faintC; ctx.font = '500 17px ' + font;
+    ctx.fillText(d.count + ' 次提交 · ' + (d.minutes / 60).toFixed(1) + ' 小时' + (d.mode === 'week' ? ' · 打卡 ' + d.days + ' 天' : ''), 48, 352);
+
+    // 三个统计块
+    var stats = [
+      { icon: '🔥', label: '当前连胜', value: d.streak + ' 天' },
+      { icon: '🌱', label: '当前等级', value: 'Lv.' + levelFromXp(totalXp()) },
+      d.mode === 'week' ? { icon: '📅', label: '本周打卡', value: d.days + ' 天' } : { icon: '⚡', label: '今日提交', value: d.count + ' 次' }
+    ];
+    var bw = (W - 96 - 24) / 3, by = 392, bh = 92;
+    stats.forEach(function (s, i) {
+      var bx = 48 + i * (bw + 12);
+      rr(ctx, bx, by, bw, bh, 16);
+      ctx.fillStyle = surface; ctx.fill();
+      ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+      ctx.textAlign = 'left';
+      ctx.font = '20px ' + font;
+      ctx.fillText(s.icon, bx + 16, by + 24);
+      ctx.fillStyle = textC; ctx.font = '800 24px ' + font;
+      ctx.fillText(s.value, bx + 16, by + 52);
+      ctx.fillStyle = faintC; ctx.font = '500 13px ' + font;
+      ctx.fillText(s.label, bx + 16, by + 76);
+    });
+
+    // 热力条
+    ctx.fillStyle = textC; ctx.font = '700 18px ' + font; ctx.textAlign = 'left';
+    ctx.fillText(d.mode === 'today' ? '最近 7 天' : '本周热力', 48, 528);
+    var cells = [];
+    if (d.mode === 'today') { for (var k = 6; k >= 0; k--) cells.push(addDays(today, -k)); }
+    else {
+      var dow2 = (parseDate(today).getDay() + 6) % 7;
+      var mon = addDays(today, -dow2);
+      for (var k2 = 0; k2 < 7; k2++) cells.push(addDays(mon, k2));
+    }
+    var m = dayMap(true);
+    var lvColors = [];
+    for (var li = 0; li <= 7; li++) lvColors.push(cssVar('--hm-' + li) || '#ebedf0');
+    var cw = 46, cgap = (W - 96 - 7 * cw) / 6, cy = 548;
+    cells.forEach(function (ds, i) {
+      var info = m[ds];
+      var n = info ? info.n : 0, min = info ? info.min : 0;
+      var future = ds > today;
+      var cx = 48 + i * (cw + cgap);
+      rr(ctx, cx, cy, cw, cw, 10);
+      ctx.fillStyle = future ? (dark ? 'rgba(255,255,255,0.03)' : 'rgba(26,43,32,0.04)') : lvColors[levelOf(n, min)];
+      ctx.fill();
+      if (ds === today) { ctx.strokeStyle = dark ? '#60a5fa' : '#2563eb'; ctx.lineWidth = 2; ctx.stroke(); }
+      ctx.fillStyle = faintC; ctx.font = '500 12px ' + font; ctx.textAlign = 'center';
+      ctx.fillText(WEEKDAYS[parseDate(ds).getDay()].slice(1), cx + cw / 2, cy + cw + 16);
+    });
+
+    // 专注分布
+    ctx.textAlign = 'left'; ctx.fillStyle = textC; ctx.font = '700 18px ' + font;
+    ctx.fillText('专注分布', 48, 654);
+    var tagEntries = Object.keys(d.tags).map(function (k) { return [k, d.tags[k]]; })
+      .sort(function (a, b) { return b[1] - a[1]; }).slice(0, 3);
+    var maxTag = tagEntries.length ? tagEntries[0][1] : 1;
+    var palette = dark ? TAG_COLORS_DARK : TAG_COLORS_LIGHT;
+    if (!tagEntries.length) {
+      ctx.fillStyle = faintC; ctx.font = '500 15px ' + font;
+      ctx.fillText('还没有记录，期待你的第一次打卡', 48, 690);
+    }
+    tagEntries.forEach(function (e, i) {
+      var ty = 688 + i * 40;
+      var h = 0;
+      for (var ci = 0; ci < e[0].length; ci++) h = (h * 31 + e[0].charCodeAt(ci)) >>> 0;
+      var col = palette[h % palette.length];
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(56, ty, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = textC; ctx.font = '600 15px ' + font; ctx.textAlign = 'left';
+      ctx.fillText(e[0], 72, ty + 1);
+      var bx = 230, bw2 = W - 96 - 230 - 80;
+      rr(ctx, bx, ty - 6, bw2, 12, 6);
+      ctx.fillStyle = dark ? 'rgba(255,255,255,0.06)' : 'rgba(26,43,32,0.06)'; ctx.fill();
+      rr(ctx, bx, ty - 6, Math.max(12, bw2 * e[1] / maxTag), 12, 6);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.fillStyle = subC; ctx.font = '600 14px ' + font; ctx.textAlign = 'right';
+      ctx.fillText(e[1] + ' 分钟', W - 48, ty + 1);
+      ctx.textAlign = 'left';
+    });
+
+    // 总结话语
+    var qy = 826;
+    rr(ctx, 48, qy - 26, W - 96, 132, 16);
+    ctx.fillStyle = surface; ctx.fill();
+    ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.stroke();
+    ctx.fillStyle = brand; ctx.font = '800 30px ' + font;
+    ctx.fillText('“', 62, qy - 4);
+    ctx.fillStyle = textC; ctx.font = '500 17px ' + font;
+    var lines = wrapText(ctx, shareQuote(d), W - 96 - 60);
+    lines.slice(0, 3).forEach(function (ln, i) { ctx.fillText(ln, 92, qy + 20 + i * 26); });
+    ctx.fillStyle = brand; ctx.font = '600 14px ' + font;
+    ctx.fillText(praise(), 92, qy + 104);
+
+    // 页脚
+    ctx.strokeStyle = border; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(48, H - 72); ctx.lineTo(W - 48, H - 72); ctx.stroke();
+    ctx.fillStyle = faintC; ctx.font = '500 13px ' + font; ctx.textAlign = 'left';
+    ctx.fillText('🌱 每天进步一点点 · 学习打卡墙', 48, H - 44);
+    ctx.textAlign = 'right';
+    ctx.fillText(location.host, W - 48, H - 44);
+    ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  }
+
+  function openShare() {
+    renderShareCard();
+    $('#shareOverlay').classList.remove('hidden');
+  }
+  function closeShare() { $('#shareOverlay').classList.add('hidden'); }
+  function setShareMode(mode) {
+    shareMode = mode;
+    $('#shareTabToday').classList.toggle('active', mode === 'today');
+    $('#shareTabWeek').classList.toggle('active', mode === 'week');
+    renderShareCard();
+  }
+
+  function downloadShare() {
+    $('#shareCanvas').toBlob(function (b) {
+      if (!b) { toast('图片生成失败', 'error'); return; }
+      downloadBlob(b, 'study-' + shareMode + '-' + todayStr() + '.png');
+      toast('⬇️ 分享图片已下载，可直接发到 QQ 空间');
+    }, 'image/png');
+  }
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); toast('📋 文案已复制'); }
+    catch (e) { toast('复制失败，请手动复制', 'warn'); }
+    ta.remove();
+  }
+  function copyShareText() {
+    var info = shareCopyText();
+    var text = info.title + '\n' + info.summary;
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text)
+        .then(function () { toast('📋 文案已复制，配上图片发空间吧'); })
+        .catch(function () { fallbackCopy(text); });
+    } else fallbackCopy(text);
+  }
+
   /* ================= 渲染入口与事件绑定 ================= */
   function renderAll() {
     if (dataLoaded && availableYears().indexOf(hmYear) === -1) hmYear = new Date().getFullYear();
@@ -2011,7 +2378,18 @@
       if (e.key === 'Enter') submitUnlock();
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { closeModal(); closeChangePwd(); closeYearMenu(); closeGoalDialog(); resolveConfirm(false); }
+      if (e.key === 'Escape') { closeModal(); closeChangePwd(); closeYearMenu(); closeGoalDialog(); closeShare(); resolveConfirm(false); }
+    });
+
+    // 分享打卡
+    $('#btnShare').addEventListener('click', openShare);
+    $('#shareTabToday').addEventListener('click', function () { setShareMode('today'); });
+    $('#shareTabWeek').addEventListener('click', function () { setShareMode('week'); });
+    $('#shareDownload').addEventListener('click', downloadShare);
+    $('#shareCopy').addEventListener('click', copyShareText);
+    $('#shareClose').addEventListener('click', closeShare);
+    $('#shareOverlay').addEventListener('click', function (e) {
+      if (e.target === this) closeShare();
     });
 
     // 每日目标

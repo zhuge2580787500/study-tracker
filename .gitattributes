@@ -1,0 +1,4 @@
+# 统一 LF 换行，保证 Linux 脚本在任何平台 checkout 后都可直接运行
+* text=auto eol=lf
+*.png binary
+*.tar.gz binary

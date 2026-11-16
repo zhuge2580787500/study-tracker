@@ -1,0 +1,17 @@
+# ===== 隐私与数据（绝不提交）=====
+# 管理密码配置
+.env
+# 真实学习记录数据
+commits.json
+# 自动快照与手动备份
+backups/
+# nohup 日志与进程文件
+logs/
+tracker.pid
+# 数据备份包
+*.tar.gz
+
+# ===== 运行时 =====
+__pycache__/
+*.pyc
+.DS_Store

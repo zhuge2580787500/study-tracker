@@ -359,6 +359,11 @@ class Handler(BaseHTTPRequestHandler):
                 return self._delete_commit(parse_qs(parsed.query))
             return self._json(404, {"error": "接口不存在"})
 
+        if method == "PUT":
+            if path == "/api/commits":
+                return self._update_commit(parse_qs(parsed.query))
+            return self._json(404, {"error": "接口不存在"})
+
         # OPTIONS 等一律拒绝，且不返回任何 CORS 头（天然阻断跨站伪造请求）
         return self._json(405, {"error": "不支持的请求方法"})
 
@@ -372,6 +377,9 @@ class Handler(BaseHTTPRequestHandler):
         self._safe_route()
 
     def do_DELETE(self):
+        self._safe_route()
+
+    def do_PUT(self):
         self._safe_route()
 
     def do_OPTIONS(self):
@@ -448,6 +456,57 @@ class Handler(BaseHTTPRequestHandler):
             data["commits"] = remaining
             _save_unlocked(data)
         self._json(200, {"ok": True})
+
+    def _update_commit(self, query):
+        """编辑记录：仅允许修改 content / duration / tag / heatmap，日期时间不变。"""
+        if not self._check_auth():
+            return
+        rid = (query.get("id") or [""])[0].strip()
+        if not rid:
+            raise ApiError(400, "缺少 id 参数")
+        payload = self._read_body()
+        if not isinstance(payload, dict):
+            raise ApiError(400, "请求体应为 JSON 对象")
+
+        try:
+            duration = int(payload.get("duration"))
+        except (TypeError, ValueError):
+            raise ApiError(400, "duration 必须是整数分钟数")
+        if not 1 <= duration <= DURATION_MAX:
+            raise ApiError(400, "duration 必须在 1~%d 分钟之间" % DURATION_MAX)
+
+        tag = str(payload.get("tag", "")).strip()
+        if not tag:
+            raise ApiError(400, "tag 不能为空")
+        if len(tag) > TAG_MAX_LEN:
+            raise ApiError(400, "tag 不能超过 %d 个字符" % TAG_MAX_LEN)
+
+        content = str(payload.get("content", "")).strip()
+        if not content:
+            raise ApiError(400, "content 不能为空")
+        if len(content) > CONTENT_MAX_LEN:
+            raise ApiError(400, "content 不能超过 %d 个字符" % CONTENT_MAX_LEN)
+
+        hm = payload.get("heatmap", True)
+        if not isinstance(hm, bool):
+            raise ApiError(400, "heatmap 必须是布尔值（true/false）")
+
+        with _data_lock:
+            data = _load_unlocked()
+            target = None
+            for c in data["commits"]:
+                if c.get("id") == rid:
+                    target = c
+                    break
+            if target is None:
+                raise ApiError(404, "未找到该记录")
+            _backup_unlocked()  # 修改前自动快照
+            target["duration"] = duration
+            target["tag"] = tag
+            target["content"] = content
+            target["heatmap"] = hm
+            _save_unlocked(data)
+        self._json(200, {"ok": True, "commit": target})
 
     def _export(self):
         if not self._check_auth():

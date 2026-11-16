@@ -247,6 +247,8 @@
     font-size: 16px; background: var(--surface-2); color: var(--text);
     transition: border-color .18s, box-shadow .18s, background-color .25s;
   }
+  .input-small.input-error { border-color: var(--rose); }
+  .input-small.input-error:focus { outline: none; border-color: var(--rose); box-shadow: 0 0 0 3px var(--rose-soft); }
   #fCustomDur { width: 128px; }
   #fCustomTag { width: 148px; }
   .push-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
@@ -371,7 +373,9 @@
   .check-pill input { width: 16px; height: 16px; accent-color: var(--brand); cursor: pointer; margin: 0; }
   .check-pill:has(input:checked) { background: var(--brand-soft); border-color: var(--brand); color: var(--brand); }
   .record-content { font-size: 14px; white-space: pre-wrap; word-break: break-word; color: var(--text); }
-  .record .btn-danger { margin-left: auto; min-height: 36px; font-size: 12.5px; padding: 4px 12px; }
+  .record-actions { margin-left: auto; display: flex; gap: 6px; }
+  .record-actions .btn { min-height: 36px; font-size: 12.5px; padding: 4px 12px; }
+  .record .btn-danger { min-height: 36px; font-size: 12.5px; padding: 4px 12px; }
   .empty { text-align: center; color: var(--text-3); padding: 22px 0 14px; }
   .empty-art { display: block; margin: 0 auto 10px; }
   .empty-art .leaf { transform-origin: 60px 60px; animation: sway 4s ease-in-out infinite alternate; }
@@ -486,6 +490,20 @@
 
   /* ================= 彩带 ================= */
   .confetti-canvas { position: fixed; inset: 0; z-index: 400; pointer-events: none; }
+
+  /* ================= 编辑记录弹窗 ================= */
+  .edit-dialog { max-width: 430px; }
+  .edit-meta { font-size: 12px; color: var(--text-3); margin-bottom: 10px; }
+  .edit-dialog textarea {
+    width: 100%; min-height: 84px; padding: 10px 12px; resize: vertical;
+    border: 1px solid var(--border); border-radius: 10px; background: var(--surface-2);
+    font-size: 16px; line-height: 1.5; margin-bottom: 12px;
+    transition: border-color .18s, box-shadow .18s, background-color .25s;
+  }
+  .edit-dialog textarea:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); background: var(--surface); }
+  .edit-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .edit-label { font-size: 13px; font-weight: 600; color: var(--text-2); min-width: 96px; }
+  .edit-row .input-small { flex: 1; min-width: 120px; }
 
   /* ================= 分享弹窗 ================= */
   .share-dialog { max-width: 430px; }
@@ -818,6 +836,36 @@
     <div class="dialog-actions">
       <button class="btn" id="goalCancel">取消</button>
       <button class="btn btn-primary" id="goalOk">保存目标</button>
+    </div>
+  </div>
+</div>
+
+<!-- 编辑记录弹窗 -->
+<div class="overlay hidden" id="editOverlay">
+  <div class="dialog edit-dialog">
+    <h3>✏️ 编辑记录</h3>
+    <p class="edit-meta" id="editMeta"></p>
+    <textarea id="editContent" maxlength="2000" placeholder="学习内容（可补充踩坑笔记）"></textarea>
+    <div class="edit-row">
+      <label class="edit-label" for="editDuration">⏱ 时长（分钟）</label>
+      <input type="number" id="editDuration" class="input-small" min="1" max="1440">
+    </div>
+    <div class="edit-row">
+      <label class="edit-label" for="editTag">🏷 标签</label>
+      <input type="text" id="editTag" class="input-small" maxlength="30" list="tagOptions" placeholder="选择或输入标签">
+      <datalist id="tagOptions"></datalist>
+    </div>
+    <div class="edit-row">
+      <label class="check-pill" for="editHeatmap">
+        <input type="checkbox" id="editHeatmap">
+        <span>计入热力图</span>
+      </label>
+      <span class="muted" style="font-size:12px">关闭后格子颜色会重新计算</span>
+    </div>
+    <div class="err" id="editErr"></div>
+    <div class="dialog-actions">
+      <button class="btn" id="editCancel" type="button">取消</button>
+      <button class="btn btn-primary" id="editOk" type="button">保存修改</button>
     </div>
   </div>
 </div>
@@ -1474,11 +1522,19 @@
     }
 
     if (unlocked) {
+      var actions = document.createElement('div');
+      actions.className = 'record-actions';
+      var editBtn = document.createElement('button');
+      editBtn.className = 'btn';
+      editBtn.textContent = '✏️ 编辑';
+      editBtn.addEventListener('click', function () { openEdit(c.id); });
+      actions.appendChild(editBtn);
       var del = document.createElement('button');
       del.className = 'btn btn-danger';
       del.textContent = '🗑 删除';
       del.addEventListener('click', function () { deleteCommit(c.id); });
-      meta.appendChild(del);
+      actions.appendChild(del);
+      meta.appendChild(actions);
     }
     wrap.appendChild(meta);
 
@@ -1515,6 +1571,8 @@
       b.addEventListener('click', function () {
         selDuration = v;
         $('#fCustomDur').value = '';
+        $('#fCustomDur').classList.remove('input-error');
+        $('#fCustomDur').setAttribute('aria-invalid', 'false');
         syncChips();
       });
       durBox.appendChild(b);
@@ -1544,12 +1602,28 @@
       ts[j].classList.toggle('active', ts[j].dataset.v === selTag && !$('#fCustomTag').value);
   }
 
+  /* 自定义时长状态：空=用快捷 chip；非空必须是 1~1440 的整数，否则标红并拦截提交 */
+  function customDurState() {
+    var raw = $('#fCustomDur').value.trim();
+    if (raw === '') return { empty: true, valid: true, value: 0 };
+    var ok = /^\d+$/.test(raw);
+    var v = ok ? parseInt(raw, 10) : NaN;
+    ok = ok && v >= 1 && v <= 1440;
+    return { empty: false, valid: ok, value: v };
+  }
+
   function pushCommit() {
     var content = $('#fContent').value.trim();
     if (!content) { toast('请先填写学习内容', 'warn'); $('#fContent').focus(); return; }
     var date = $('#fDate').value || todayStr();
     if (date > todayStr()) { toast('不能提交未来日期', 'warn'); return; }
     var time = $('#fTime').value || nowTime();
+    var cd = customDurState();
+    if (!cd.empty && !cd.valid) {
+      toast('自定义时长需为 1~1440 的整数，请修正后再提交', 'warn');
+      $('#fCustomDur').focus();
+      return;
+    }
     if (!(selDuration >= 1 && selDuration <= 1440)) { toast('时长需在 1~1440 分钟之间', 'warn'); return; }
     if (!selTag) { toast('请选择或输入标签', 'warn'); return; }
 
@@ -1993,6 +2067,75 @@
     return PRAISES[i];
   }
 
+  /* ================= 编辑记录 ================= */
+  var editingId = null;
+
+  function openEdit(id) {
+    var c = null;
+    for (var i = 0; i < commits.length; i++) if (commits[i].id === id) c = commits[i];
+    if (!c) return;
+    editingId = id;
+    $('#editMeta').textContent = '📅 ' + c.date + ' ' + (c.time || '') + ' · 日期时间保持不变';
+    $('#editContent').value = c.content || '';
+    $('#editDuration').value = c.duration;
+    $('#editDuration').classList.remove('input-error');
+    $('#editTag').value = c.tag || '';
+    $('#editHeatmap').checked = c.heatmap !== false;
+    $('#editErr').textContent = '';
+    var dl = $('#tagOptions');
+    dl.innerHTML = '';
+    var seen = {};
+    TAGS.concat(commits.map(function (x) { return x.tag; })).forEach(function (t) {
+      if (t && !seen[t]) {
+        seen[t] = 1;
+        var o = document.createElement('option');
+        o.value = t;
+        dl.appendChild(o);
+      }
+    });
+    $('#editOverlay').classList.remove('hidden');
+    setTimeout(function () { $('#editContent').focus(); }, 60);
+  }
+  function closeEdit() {
+    $('#editOverlay').classList.add('hidden');
+    editingId = null;
+  }
+  function saveEdit() {
+    if (!editingId) return;
+    var content = $('#editContent').value.trim();
+    var durRaw = $('#editDuration').value.trim();
+    var tag = $('#editTag').value.trim();
+    var errEl = $('#editErr');
+    if (!content) { dlgError(errEl, '内容不能为空'); return; }
+    if (content.length > 2000) { dlgError(errEl, '内容不能超过 2000 字'); return; }
+    if (!/^\d+$/.test(durRaw) || +durRaw < 1 || +durRaw > 1440) {
+      dlgError(errEl, '时长需为 1~1440 的整数');
+      $('#editDuration').classList.add('input-error');
+      return;
+    }
+    $('#editDuration').classList.remove('input-error');
+    if (!tag) { dlgError(errEl, '标签不能为空'); return; }
+    if (tag.length > 30) { dlgError(errEl, '标签不能超过 30 字'); return; }
+
+    var btn = $('#editOk');
+    btn.disabled = true;
+    api('/api/commits?id=' + encodeURIComponent(editingId), {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: content, duration: +durRaw, tag: tag, heatmap: $('#editHeatmap').checked })
+    }).then(function (res) {
+      for (var i = 0; i < commits.length; i++) {
+        if (commits[i].id === editingId) { commits[i] = res.commit; break; }
+      }
+      closeEdit();
+      renderAll();
+      toast('✏️ 记录已更新');
+    }).catch(function (err) {
+      if (err.status === 401) closeEdit();
+      else dlgError(errEl, err.message);
+    }).then(function () { btn.disabled = false; });
+  }
+
   /* ================= 分享卡片 ================= */
   var shareMode = 'today';
 
@@ -2378,7 +2521,20 @@
       if (e.key === 'Enter') submitUnlock();
     });
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') { closeModal(); closeChangePwd(); closeYearMenu(); closeGoalDialog(); closeShare(); resolveConfirm(false); }
+      if (e.key === 'Escape') { closeModal(); closeChangePwd(); closeYearMenu(); closeGoalDialog(); closeShare(); closeEdit(); resolveConfirm(false); }
+    });
+
+    // 编辑记录
+    $('#editOk').addEventListener('click', saveEdit);
+    $('#editCancel').addEventListener('click', closeEdit);
+    $('#editOverlay').addEventListener('click', function (e) {
+      if (e.target === this) closeEdit();
+    });
+    $('#editContent').addEventListener('keydown', function (e) {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); saveEdit(); }
+    });
+    $('#editDuration').addEventListener('input', function () {
+      this.classList.remove('input-error');
     });
 
     // 分享打卡
@@ -2444,8 +2600,11 @@
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); pushCommit(); }
     });
     $('#fCustomDur').addEventListener('input', function () {
-      var v = parseInt(this.value, 10);
-      if (v >= 1 && v <= 1440) selDuration = v;
+      var st = customDurState();
+      var bad = !st.empty && !st.valid;
+      this.classList.toggle('input-error', bad);
+      this.setAttribute('aria-invalid', bad ? 'true' : 'false');
+      if (!st.empty && st.valid) selDuration = st.value;
       syncChips();
     });
     $('#fCustomTag').addEventListener('input', function () {
